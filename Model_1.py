@@ -9,7 +9,6 @@ import numpy as np
 import nibabel as nib
 import os
 from google.colab import drive
-import h5py
 
 class UNet(nn.Module):
     def __init__(self):
