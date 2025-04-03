@@ -7,6 +7,7 @@ Original file is located at
     https://colab.research.google.com/drive/1ZdeJa7iPzpJaCQCW1iekbpMjOIZMn3WM
 """
 
+from google.colab import drive
 drive.mount('/content/drive')
 
 import torch
@@ -35,33 +36,27 @@ class UNet(nn.Module):
         return torch.sigmoid(self.final(x3))
 
 class BraTSDataset(Dataset):
-    def __init__(self,image_dir,mask_dir):
+    def __init__(self,image_dir):
         self.image_dir = image_dir
-        self.mask_dir = mask_dir
         self.images = os.listdir(self.image_dir)
     def __len__(self):
         return len(self.images)
     def __getitem__(self,idx):
         img_path = os.path.join(self.image_dir,self.images[idx])
-        mask_path = os.path.join(self.mask_dir,self.images[idx])
         image_nifti = nib.load(img_path).get_fdata()
-        mask_nifti = nib.load(mask_path).get_fdata()
 
         image = np.array(image_nifti,dtype=np.float32)
-        mask = np.array(mask_nifti,dtype=np.float32)
 
         image = (image-np.min(image))/(np.max(image) - np.min(image))
-        mask = (mask>0).astype(np.float32)
 
         image = torch.tensor(image, dtype=torch.float32)
-        mask = torch.tensor(mask, dtype=torch.float32)
 
-        return image,mask
+        return image
 
 base_path = '/content/drive/My Drive/3/BraTS2020_training_data'
 train_image_path = os.path.join(base_path,"content")
 
-train_dataset = data(train_image_path,train_mask_path)
+train_dataset = BraTSDataset(train_image_path,)
 train_loader = DataLoader(train_dataset,batch_size=4,shuffle =True)
 
 Model = UNet()
@@ -70,11 +65,27 @@ optimizer = torch.optim.Adam(Model.parameters(), lr=0.001)
 
 epochs = 20
 for epoch in range(epochs):
-  for images, mask in train_loader:
+  for images in train_loader:
     optimizer.zero_grad()
     output = Model(images)
-    loss = criterion(output,mask)
+    loss = criterion(output)
     loss.backward()
     optimizer.step()
   print(f"epochs {epoch+1}/{epochs}, Loss: {loss.item():.4f}")
+
+def dice_coefficient(pred,target,epsilon=1e-6):
+  intersection = (pred*target).sum()
+  return (2.0*intersection+epsilon)/(pred.sum()+target.sum()+epsilon)
+
+Model.eval()
+dice_scores = []
+with torch.no_grad():
+  for images in train_loader:
+    outputs = Model(images)
+    loss = criterion(outputs)
+    test_loss += loss.item()
+    dice_scores.append(dice_score.item())
+
+mean_dice = np.mean(dice_scores)
+print(f"Mean Dice Score: {mean_dice:.4f}")
 
